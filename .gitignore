@@ -1,0 +1,98 @@
+# ============================================================
+#  .gitignore —— Git 的「免打扰名单」
+#  写在这里的文件 / 文件夹，Git 会假装没看见，不会上传到 GitHub
+#  以 # 开头的是注释，空行会被忽略
+# ============================================================
+
+# ---------- 1. 密钥与隐私（最重要！一定要留在名单里） ----------
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+config.local.*
+*credentials*
+*token*
+!*.example.env          # 例外：以 .example.env 结尾的模板文件允许上传
+
+# ---------- 2. Python 运行产生的垃圾文件 ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ---------- 3. Python 虚拟环境（体积大且每人不同，不该上传） ----------
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ---------- 4. 测试与检查工具缓存 ----------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ---------- 5. Node / 前端相关 ----------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.next/
+.nuxt/
+.vite/
+dist-ssr/
+*.local
+
+# ---------- 6. 编辑器与 IDE 的个人配置 ----------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------- 7. 操作系统自动生成的隐藏文件 ----------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# ---------- 8. Jupyter Notebook 检查点 ----------
+.ipynb_checkpoints/
+
+# ---------- 9. 数据与模型（通常很大，仓库放不下） ----------
+*.csv
+*.xlsx
+*.parquet
+*.sqlite
+*.db
+*.h5
+*.pth
+*.ckpt
+*.onnx
+data/raw/
+!docs/**/*.csv        # 例外：docs 里用来做示例的小数据可以上传
+
+# ---------- 10. 日志与临时文件 ----------
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# ---------- 11. AI 助手的工作目录（本地笔记，不上传） ----------
+.workbuddy/

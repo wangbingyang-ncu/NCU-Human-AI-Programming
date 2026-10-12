@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-label="南昌大学 Nanchang University">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b3d91"/>
+      <stop offset="55%" stop-color="#123f7a"/>
+      <stop offset="100%" stop-color="#1a5490"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffd76e"/>
+      <stop offset="100%" stop-color="#e0a72c"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="280" fill="url(#bg)"/>
+  <circle cx="1080" cy="40" r="150" fill="#ffffff" opacity="0.05"/>
+  <circle cx="120" cy="260" r="180" fill="#ffffff" opacity="0.04"/>
+
+  <!-- 徽标 -->
+  <g transform="translate(150,140)">
+    <circle r="78" fill="none" stroke="url(#ring)" stroke-width="5"/>
+    <circle r="66" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.55"/>
+    <path d="M0,-46 L12,-14 L46,-14 L18,5 L29,38 L0,18 L-29,38 L-18,5 L-46,-14 L-12,-14 Z"
+          fill="url(#ring)" opacity="0.95"/>
+    <path d="M-40,52 C-20,44 20,44 40,52" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.7" stroke-linecap="round"/>
+    <path d="M-34,62 C-17,55 17,55 34,62" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.45" stroke-linecap="round"/>
+  </g>
+
+  <!-- 校名 -->
+  <text x="270" y="124" font-family="'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif"
+        font-size="64" font-weight="700" fill="#ffffff" letter-spacing="10">南昌大学</text>
+  <text x="272" y="166" font-family="'Segoe UI',Arial,sans-serif"
+        font-size="21" font-weight="600" fill="#cfe0f7" letter-spacing="5.5">NANCHANG UNIVERSITY</text>
+
+  <line x1="272" y1="188" x2="1120" y2="188" stroke="#ffffff" stroke-width="1" opacity="0.28"/>
+
+  <text x="272" y="222" font-family="'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif"
+        font-size="20" fill="#e8f1ff" letter-spacing="3">《人机协同编程》课程 · 个人作品集仓库</text>
+  <text x="272" y="250" font-family="'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif"
+        font-size="15" fill="#a9c4e8" letter-spacing="4">格物致新 · 厚德泽人</text>
+</svg>
