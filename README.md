@@ -143,7 +143,7 @@ AI 承担了约 90% 的代码产出（770 行单文件 + 四层自动化验证�
 
 ### 🔗 GitHub 远端
 
-仓库地址：`https://github.com/<username>/NCU-Human-AI-Programming`（首次推送后回填真实用户名；推送方式见 `push-to-github.bat`）
+仓库地址：**https://github.com/wangbingyang-ncu/NCU-Human-AI-Programming**
 
 ---
 
