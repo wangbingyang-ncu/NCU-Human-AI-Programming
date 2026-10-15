@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>单摆物理模拟器 · 简谐振动</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#12121a;
+    color:#c8d2e0;
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+    overflow:hidden;
+  }
+
+  .app{display:flex;flex-direction:column;height:100vh;width:100vw}
+  .main{display:flex;flex:1 1 auto;min-height:0}
+
+  /* ---------- 左侧控制面板 ---------- */
+  .panel{
+    width:296px;flex:0 0 296px;
+    background:#15151f;
+    border-right:1px solid rgba(120,140,180,.14);
+    padding:18px 18px 24px;
+    overflow-y:auto;
+  }
+  .panel::-webkit-scrollbar{width:6px}
+  .panel::-webkit-scrollbar-thumb{background:rgba(120,140,180,.25);border-radius:3px}
+
+  .brand{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .brand .dot{
+    width:9px;height:9px;border-radius:50%;background:#4de2ff;
+    box-shadow:0 0 10px 2px rgba(77,226,255,.7);
+  }
+  .brand h1{font-size:15px;font-weight:600;color:#e8eef7;letter-spacing:.3px}
+  .brand-sub{font-size:11.5px;color:#5f6b80;margin:0 0 18px 18px;letter-spacing:.2px}
+
+  .sec{
+    font-size:11px;color:#5f6b80;letter-spacing:1.4px;
+    margin:20px 0 10px;text-transform:uppercase;
+  }
+  .sec:first-of-type{margin-top:6px}
+
+  .row{margin-bottom:14px}
+  .row-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .row-head label{font-size:12.5px;color:#9aa7bb}
+  .row-head .val{
+    font-family:ui-monospace,Consolas,monospace;
+    font-size:12.5px;color:#4de2ff;font-weight:600;
+  }
+  .row-head .val small{color:#5f6b80;font-weight:400;margin-left:2px}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:3px;border-radius:2px;
+    background:rgba(120,140,180,.22);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;
+    background:#4de2ff;
+    box-shadow:0 0 8px 1px rgba(77,226,255,.65);
+    cursor:pointer;transition:transform .12s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.18)}
+
+  .check{
+    display:flex;align-items:center;gap:9px;
+    font-size:12.5px;color:#9aa7bb;cursor:pointer;
+    padding:6px 0;user-select:none;
+  }
+  .check input{
+    -webkit-appearance:none;appearance:none;
+    width:15px;height:15px;border-radius:4px;
+    border:1px solid rgba(120,140,180,.4);
+    background:transparent;cursor:pointer;position:relative;flex:0 0 15px;
+  }
+  .check input:checked{background:#4de2ff;border-color:#4de2ff}
+  .check input:checked::after{
+    content:"";position:absolute;left:4.5px;top:1.5px;
+    width:4px;height:8px;
+    border:solid #12121a;border-width:0 2px 2px 0;
+    transform:rotate(45deg);
+  }
+
+  .btns{display:flex;gap:8px;margin-top:6px}
+  button{
+    flex:1;padding:9px 0;font-size:12.5px;
+    font-family:inherit;color:#c8d2e0;cursor:pointer;
+    background:rgba(120,140,180,.11);
+    border:1px solid rgba(120,140,180,.22);
+    border-radius:8px;transition:all .15s;
+  }
+  button:hover{background:rgba(77,226,255,.14);border-color:rgba(77,226,255,.5);color:#eafaff}
+  button.primary{background:rgba(77,226,255,.16);border-color:rgba(77,226,255,.45);color:#8df0ff}
+
+  /* ---------- 读数区 ---------- */
+  .readout{
+    background:rgba(120,140,180,.06);
+    border:1px solid rgba(120,140,180,.13);
+    border-radius:10px;padding:12px 13px;
+  }
+  .rd{display:flex;justify-content:space-between;align-items:baseline;padding:3.5px 0;font-size:12.5px}
+  .rd span{color:#7c8a9e}
+  .rd b{font-family:ui-monospace,Consolas,monospace;font-weight:600;color:#dbe6f5;font-size:12.5px}
+  .rd b.cy{color:#4de2ff}
+  .rd b.am{color:#ffb547}
+
+  .ebar{margin:9px 0 3px}
+  .ebar-top{display:flex;justify-content:space-between;font-size:11px;color:#7c8a9e;margin-bottom:4px}
+  .ebar-track{height:5px;border-radius:3px;background:rgba(120,140,180,.16);overflow:hidden}
+  .ebar-fill{height:100%;border-radius:3px;transition:width .06s linear}
+
+  .note{
+    font-size:11.5px;color:#5f6b80;line-height:1.75;
+    margin-top:14px;padding-top:12px;
+    border-top:1px solid rgba(120,140,180,.13);
+  }
+  .note b{color:#8df0ff;font-weight:600}
+
+  /* ---------- 画布 ---------- */
+  .stage{flex:1;position:relative;min-width:0}
+  canvas{display:block;width:100%;height:100%}
+  .hint{
+    position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
+    font-size:11.5px;color:#4a5468;letter-spacing:.4px;
+    pointer-events:none;white-space:nowrap;
+  }
+
+  /* ---------- 画布下方的参数控制台 ---------- */
+  .dock{
+    flex:0 0 auto;
+    background:#15151f;
+    border-top:1px solid rgba(120,140,180,.14);
+    padding:15px 22px 17px;
+    display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;
+  }
+  .dock .row{margin-bottom:0;flex:1 1 190px;min-width:172px}
+  .row-foot{font-size:11px;color:#5f6b80;margin-top:7px;letter-spacing:.2px}
+  .row-foot b{color:#7c8a9e;font-weight:600}
+  .dock .btns{flex:0 0 auto;display:flex;gap:9px;margin:0}
+  .dock .btns button{flex:0 0 auto;min-width:108px;padding:9px 18px}
+  .dock .btns button.primary{
+    background:rgba(77,226,255,.18);border-color:rgba(77,226,255,.5);color:#9df3ff;
+  }
+  .dock .btns button.primary:hover{background:rgba(77,226,255,.3);color:#eafaff}
+
+  @media (max-width:900px){
+    .main{flex-direction:column}
+    .panel{width:auto;flex:0 0 auto;max-height:36vh;border-right:none;border-bottom:1px solid rgba(120,140,180,.14)}
+    .stage{flex:1 1 auto;min-height:0}
+    .dock{gap:14px;padding:13px 16px 15px}
+    .dock .row{flex:1 1 140px;min-width:130px}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="main">
+
+  <aside class="panel">
+    <div class="brand">
+      <div class="dot"></div>
+      <h1>单摆物理模拟器</h1>
+    </div>
+    <p class="brand-sub">Simple Pendulum · RK4 数值积分</p>
+
+    <div class="sec">显示选项</div>
+
+    <label class="check"><input type="checkbox" id="cShm">小角度近似（理想简谐）</label>
+    <label class="check"><input type="checkbox" id="cTrail" checked>显示运动轨迹</label>
+    <label class="check"><input type="checkbox" id="cVec" checked>显示速度 / 重力矢量</label>
+    <label class="check"><input type="checkbox" id="cGuide" checked>显示摆角参考弧</label>
+
+    <div class="sec">实时读数</div>
+    <div class="readout">
+      <div class="rd"><span>摆角 θ</span><b class="cy" id="rTheta">45.0°</b></div>
+      <div class="rd"><span>角速度 ω</span><b id="rOmega">0.000 rad/s</b></div>
+      <div class="rd"><span>线速度 v</span><b id="rV">0.00 m/s</b></div>
+      <div class="rd"><span>周期 T 精确</span><b class="am" id="rT1">—</b></div>
+      <div class="rd"><span>周期 T 简谐近似</span><b id="rT2">—</b></div>
+      <div class="rd"><span>已运行</span><b id="rTime">0.00 s</b></div>
+      <div class="rd"><span>帧率</span><b id="rFps">—</b></div>
+      <div class="rd" style="margin-top:4px;padding-top:8px;border-top:1px solid rgba(120,140,180,.13)">
+        <span>阻尼比 ζ</span><b id="rZeta">0.0000</b>
+      </div>
+
+      <div class="ebar">
+        <div class="ebar-top"><span>动能 Ek</span><span id="eKt">0.00 J</span></div>
+        <div class="ebar-track"><div class="ebar-fill" id="eK"
+             style="width:0%;background:linear-gradient(90deg,#ffb547,#ff8c1a)"></div></div>
+      </div>
+      <div class="ebar">
+        <div class="ebar-top"><span>势能 Ep</span><span id="ePt">0.00 J</span></div>
+        <div class="ebar-track"><div class="ebar-fill" id="eP"
+             style="width:0%;background:linear-gradient(90deg,#4de2ff,#22a8d0)"></div></div>
+      </div>
+      <div class="rd" style="margin-top:6px;padding-top:8px;border-top:1px solid rgba(120,140,180,.13)">
+        <span>总机械能 E</span><b class="cy" id="eT">0.00 J</b>
+      </div>
+    </div>
+
+    <p class="note">
+      <b>提示</b>：直接用鼠标<strong>拖动摆球</strong>到任意角度松手，即可从该角度开始摆动。<br>
+      <b>重置摆动</b>永远让摆球精准回到 <strong>45°</strong> 静止释放状态。<br>
+      比例尺：100 px = 1 m，故 L=200px 即 2.0 m 摆长。
+    </p>
+  </aside>
+
+  <main class="stage">
+    <canvas id="stage"></canvas>
+    <div class="hint">拖动摆球改变角度 · 空格键暂停 / 继续 · R 键重置摆动</div>
+  </main>
+
+  </div>
+
+  <footer class="dock">
+    <div class="row">
+      <div class="row-head"><label>摆长 L</label><span class="val" id="vL">200<small>px</small></span></div>
+      <input type="range" id="sL" min="100" max="350" step="1" value="200">
+      <div class="row-foot" id="fL">T₀ = —</div>
+    </div>
+    <div class="row">
+      <div class="row-head"><label>重力 g</label><span class="val" id="vG">9.8<small>m/s²</small></span></div>
+      <input type="range" id="sG" min="1" max="25" step="0.1" value="9.8">
+      <div class="row-foot" id="fG">ωₙ = —</div>
+    </div>
+    <div class="row">
+      <div class="row-head"><label>阻尼</label><span class="val" id="vD">0.000</span></div>
+      <input type="range" id="sD" min="0" max="0.01" step="0.001" value="0">
+      <div class="row-foot" id="fD">振幅半衰期 —</div>
+    </div>
+    <div class="btns">
+      <button class="primary" id="btnReset">重置摆动</button>
+      <button id="btnPlay">暂停</button>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   单摆物理模拟器
+   -------------------------------------------------------------------------
+   物理模型：
+        θ'' = -(g / L)·sin θ              （精确非线性单摆）
+        θ'' = -(g / L)·θ                  （小角度近似，即理想简谐振动）
+        含阻尼时再减去 c·θ'
+   其中 θ 为摆角，从竖直向下位置量起，向右为正。
+
+   数值方法：四阶龙格-库塔（RK4）+ 固定步长累加器
+            固定步长可保证不同刷新率（60Hz / 120Hz / 144Hz）下物理结果一致，
+            不会出现"高刷屏摆得更快"的问题。
+   ========================================================================= */
+
+/* ---------- 1. 常量与状态 ---------- */
+const PX_PER_METER = 100;   // 比例尺：100 像素 = 1 米（解决 px 与 m 的量纲冲突）
+const FIXED_DT     = 1 / 240; // 物理固定步长（秒），240Hz 保证精度
+const BOB_R        = 20;    // 摆球半径（像素）
+const TRAIL_MAX    = 130;   // 轨迹保留的采样点数
+const RESET_DEG    = 45;    // 「重置摆动」的释放角度（度）—— 规格固定为 45°
+
+const P = {                 // 可调参数（全部由画布下方的控制台驱动）
+  L: 200,        // 摆长（像素），范围 100 ~ 350
+  g: 9.8,        // 重力加速度（m/s²），范围 1 ~ 25
+  damping: 0,    // 阻尼系数，范围 0.000 ~ 0.010
+  mass: 1.0,     // 摆球质量（kg），仅用于能量计算
+  shm: false,    // 是否使用小角度近似
+  showTrail: true,
+  showVec: true,
+  showGuide: true
+};
+
+let theta    = RESET_DEG * Math.PI / 180; // 当前摆角（弧度）
+let refAngle = RESET_DEG * Math.PI / 180; // 参考振幅：能量基准 + 参考弧边界
+let omega   = 0;                            // 当前角速度（rad/s）
+let elapsed = 0;                            // 已运行时间（秒）
+let running = true;                         // 是否在演算
+let dragging = false;                       // 是否正在拖动摆球
+let trail   = [];                           // 轨迹点
+let W = 800, H = 600;                       // 画布逻辑尺寸（CSS 像素）
+
+/* ---------- 2. 物理内核 ---------- */
+
+/** 返回 [dθ/dt, dω/dt] */
+function derivatives(th, om) {
+  const Lm = P.L / PX_PER_METER;            // 摆长换算成米
+  // 恢复力项：精确式为 sin θ，小角度近似退化为 θ
+  const restore = P.shm ? -th : -Math.sin(th);
+  const alpha = (P.g / Lm) * restore - P.damping * om;
+  return [om, alpha];
+}
+
+/** 四阶龙格-库塔积分一步 */
+function rk4(th, om, dt) {
+  const [a1, b1] = derivatives(th, om);
+  const [a2, b2] = derivatives(th + a1 * dt / 2, om + b1 * dt / 2);
+  const [a3, b3] = derivatives(th + a2 * dt / 2, om + b2 * dt / 2);
+  const [a4, b4] = derivatives(th + a3 * dt, om + b3 * dt);
+  return [
+    th + (a1 + 2 * a2 + 2 * a3 + a4) * dt / 6,
+    om + (b1 + 2 * b2 + 2 * b3 + b4) * dt / 6
+  ];
+}
+
+/** 复位：摆球精准回到 45° 静止释放状态 */
+function reset() {
+  theta = RESET_DEG * Math.PI / 180;
+  omega = 0;
+  elapsed = 0;
+  refAngle = theta;
+  trail = [];
+}
+
+/* ---------- 3. 几何计算 ---------- */
+
+/** 悬挂点位置（随窗口大小自适应，保证摆球不出画布且构图居中） */
+function pivotPoint() {
+  // 让「悬挂点 → 摆球最低点」这一段摆动区域在画布内竖直居中，
+  // 避免摆挂得太靠上、下方留出大片空白。
+  const ideal = (H - P.L) / 2;
+  const minY  = 70;                              // 别贴到画布顶
+  const maxY  = H - P.L - BOB_R - 44;            // 别让摆球触底
+  const y = Math.max(minY, Math.min(ideal, Math.max(minY, maxY)));
+  return { x: W / 2, y };
+}
+
+/** 由角度求摆球圆心 */
+function bobPoint(pivot, th) {
+  return {
+    x: pivot.x + P.L * Math.sin(th),
+    y: pivot.y + P.L * Math.cos(th)
+  };
+}
+
+/* ---------- 4. 绘制 ---------- */
+
+function drawBackground() {
+  // 主背景：深灰科技色
+  ctx.fillStyle = "#1a1a24";
+  ctx.fillRect(0, 0, W, H);
+
+  // 悬挂点背后的柔和光晕
+  const p = pivotPoint();
+  const halo = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(W, H) * 0.55);
+  halo.addColorStop(0, "rgba(77,226,255,0.055)");
+  halo.addColorStop(0.5, "rgba(80,110,200,0.022)");
+  halo.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, W, H);
+
+  // 淡网格
+  const step = 40;
+  ctx.strokeStyle = "rgba(120,140,180,0.055)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += step) { ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, H); }
+  for (let y = 0; y <= H; y += step) { ctx.moveTo(0, y + .5); ctx.lineTo(W, y + .5); }
+  ctx.stroke();
+}
+
+/** 摆角参考弧：标出当前摆角与最大摆角 */
+function drawGuide(pivot) {
+  const r = Math.min(P.L * 0.42, 110);
+
+  // 竖直中心虚线
+  ctx.save();
+  ctx.setLineDash([4, 6]);
+  ctx.strokeStyle = "rgba(120,140,180,0.28)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x, pivot.y);
+  ctx.lineTo(pivot.x, pivot.y + P.L + 34);
+  ctx.stroke();
+  ctx.restore();
+
+  // 最大摆角处的两条边界虚线
+  const a0 = refAngle;
+  ctx.save();
+  ctx.setLineDash([3, 5]);
+  ctx.strokeStyle = "rgba(77,226,255,0.20)";
+  ctx.lineWidth = 1;
+  for (const s of [1, -1]) {
+    ctx.beginPath();
+    ctx.moveTo(pivot.x, pivot.y);
+    ctx.lineTo(pivot.x + (P.L + 30) * Math.sin(a0 * s), pivot.y + (P.L + 30) * Math.cos(a0 * s));
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 当前摆角圆弧
+  ctx.strokeStyle = "rgba(77,226,255,0.75)";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(pivot.x, pivot.y, r, Math.PI / 2, Math.PI / 2 - theta, theta > 0);
+  ctx.stroke();
+
+  // 圆弧端点到摆球方向的小段放射线
+  ctx.strokeStyle = "rgba(77,226,255,0.22)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x, pivot.y);
+  ctx.lineTo(pivot.x + (r + 12) * Math.sin(theta), pivot.y + (r + 12) * Math.cos(theta));
+  ctx.stroke();
+
+  // 角度文字：放在角平分线方向，并横向让开摆杆，避免θ≈0°时文字压线
+  const mid = Math.PI / 2 - theta / 2;
+  const tr = r + 26;
+  const lateral = 22 * (theta >= 0 ? 1 : -1);
+  ctx.font = "600 13px ui-monospace, Consolas, monospace";
+  ctx.fillStyle = "rgba(141,240,255,0.95)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(
+    (theta * 180 / Math.PI).toFixed(1) + "°",
+    pivot.x + tr * Math.cos(mid) + lateral,
+    pivot.y + tr * Math.sin(mid)
+  );
+}
+
+/** 运动轨迹（越旧越淡） */
+function drawTrail() {
+  if (trail.length < 2) return;
+  ctx.lineCap = "round";
+  for (let i = 1; i < trail.length; i++) {
+    const t = i / trail.length;                 // 0 = 最旧, 1 = 最新
+    ctx.strokeStyle = "rgba(77,226,255," + (t * t * 0.5).toFixed(3) + ")";
+    ctx.lineWidth = 0.6 + t * 2.1;
+    ctx.beginPath();
+    ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+    ctx.lineTo(trail[i].x, trail[i].y);
+    ctx.stroke();
+  }
+}
+
+/** 悬挂支点 */
+function drawPivot(pivot) {
+  // 底座横梁
+  ctx.strokeStyle = "rgba(150,175,215,0.5)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x - 46, pivot.y - 13);
+  ctx.lineTo(pivot.x + 46, pivot.y - 13);
+  ctx.stroke();
+
+  // 支点圆
+  ctx.shadowColor = "rgba(150,180,230,0.8)";
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = "#8fa6c8";
+  ctx.beginPath();
+  ctx.arc(pivot.x, pivot.y, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+/** 摆杆 */
+function drawRod(pivot, bob) {
+  ctx.shadowColor = "rgba(77,226,255,0.35)";
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = "rgba(160,205,240,0.75)";
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(pivot.x, pivot.y);
+  ctx.lineTo(bob.x, bob.y);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+/** 摆球（含发光光效） */
+function drawBob(bob) {
+  // 外层弥散光晕
+  const halo = ctx.createRadialGradient(bob.x, bob.y, BOB_R * 0.3, bob.x, bob.y, BOB_R * 3.4);
+  halo.addColorStop(0, "rgba(77,226,255,0.34)");
+  halo.addColorStop(0.35, "rgba(77,226,255,0.12)");
+  halo.addColorStop(1, "rgba(77,226,255,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(bob.x, bob.y, BOB_R * 3.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 球体本体
+  const g = ctx.createRadialGradient(
+    bob.x - BOB_R * 0.34, bob.y - BOB_R * 0.40, BOB_R * 0.08,
+    bob.x, bob.y, BOB_R
+  );
+  g.addColorStop(0.00, "#ffffff");
+  g.addColorStop(0.28, "#a8f4ff");
+  g.addColorStop(0.62, "#35c6ea");
+  g.addColorStop(1.00, "#0a5f84");
+
+  ctx.shadowColor = "rgba(77,226,255,0.95)";
+  ctx.shadowBlur = 28;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(bob.x, bob.y, BOB_R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // 高光
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(bob.x - BOB_R * 0.32, bob.y - BOB_R * 0.40,
+              BOB_R * 0.26, BOB_R * 0.18, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 边缘轮廓
+  ctx.strokeStyle = "rgba(190,245,255,0.55)";
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(bob.x, bob.y, BOB_R, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** 矢量箭头 */
+function arrow(x0, y0, x1, y1, color) {
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  const head = 9;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - head * Math.cos(a - 0.42), y1 - head * Math.sin(a - 0.42));
+  ctx.lineTo(x1 - head * Math.cos(a + 0.42), y1 - head * Math.sin(a + 0.42));
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** 速度矢量 + 重力矢量 */
+function drawVectors(pivot, bob) {
+  const Lm = P.L / PX_PER_METER;
+
+  // --- 速度（沿切线方向）---
+  const v = Lm * omega;                       // 线速度，m/s
+  const SCALE_V = 52;                         // 每 m/s 对应像素
+  const dirX = Math.cos(theta), dirY = -Math.sin(theta);
+  let len = v * SCALE_V;
+  len = Math.max(-190, Math.min(190, len));
+  if (Math.abs(len) > 3) {
+    arrow(bob.x, bob.y, bob.x + dirX * len, bob.y + dirY * len, "rgba(255,181,71,0.9)");
+    label("v", bob.x + dirX * len + 12, bob.y + dirY * len - 8, "rgba(255,181,71,0.95)");
+  }
+
+  // --- 重力（竖直向下）---
+  const SCALE_G = 7.5;                        // 每 m/s² 对应像素
+  const glen = P.g * SCALE_G;
+  arrow(bob.x, bob.y, bob.x, bob.y + glen, "rgba(255,110,170,0.85)");
+  label("g", bob.x + 12, bob.y + glen - 2, "rgba(255,110,170,0.95)");
+}
+
+function label(text, x, y, color) {
+  ctx.font = "600 12px ui-monospace, Consolas, monospace";
+  ctx.fillStyle = color;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x, y);
+}
+
+/** 画布左上角的标题水印 */
+function drawWatermark() {
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.font = "600 12.5px -apple-system, 'Microsoft YaHei', sans-serif";
+  ctx.fillStyle = "rgba(200,215,235,0.42)";
+  ctx.fillText("单摆 · Simple Pendulum", 22, 20);
+
+  ctx.font = "11.5px ui-monospace, Consolas, monospace";
+  ctx.fillStyle = "rgba(120,140,180,0.55)";
+  ctx.fillText(
+    "θ'' = -(" + P.g.toFixed(1) + " / " + (P.L / PX_PER_METER).toFixed(2) + ") · " +
+    (P.shm ? "θ" : "sin θ") + (P.damping > 0 ? " - " + P.damping.toFixed(2) + "·θ'" : ""),
+    22, 40
+  );
+}
+
+/* ---------- 5. 主循环 ---------- */
+
+let acc = 0;              // 时间累加器
+let lastTs = 0;           // 上一帧时间戳
+let fps = 0, fpsAcc = 0, fpsN = 0, fpsTimer = 0;
+
+function frame(ts) {
+  if (!lastTs) lastTs = ts;
+  let raw = (ts - lastTs) / 1000;
+  lastTs = ts;
+  // 页面切回前台时可能出现巨大的 dt，钳制掉避免积分炸开
+  if (raw > 0.08) raw = 0.08;
+
+  // --- 物理：固定步长积分 ---
+  if (running && !dragging) {
+    acc += raw;
+    let guard = 0;
+    while (acc >= FIXED_DT && guard++ < 600) {
+      const [nt, no] = rk4(theta, omega, FIXED_DT);
+      theta = nt;
+      omega = no;
+      elapsed += FIXED_DT;
+      acc -= FIXED_DT;
+    }
+  } else {
+    acc = 0;
+  }
+
+  // --- 绘制 ---
+  const pivot = pivotPoint();
+  const bob = bobPoint(pivot, theta);
+
+  if (P.showTrail) {
+    if (!dragging) trail.push({ x: bob.x, y: bob.y });
+    if (trail.length > TRAIL_MAX) trail.shift();
+  } else if (trail.length) {
+    trail.length = 0;
+  }
+
+  drawBackground();
+  if (P.showGuide) drawGuide(pivot);
+  if (P.showTrail) drawTrail();
+  drawRod(pivot, bob);
+  drawPivot(pivot);
+  if (P.showVec) drawVectors(pivot, bob);
+  drawBob(bob);
+  drawWatermark();
+
+  // --- 读数 ---
+  fpsAcc += raw; fpsN++; fpsTimer += raw;
+  if (fpsTimer >= 0.4) {
+    fps = fpsN / fpsAcc;
+    fpsAcc = 0; fpsN = 0; fpsTimer = 0;
+  }
+  updateReadout();
+
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 6. 读数更新 ---------- */
+
+const $ = id => document.getElementById(id);
+
+function updateReadout() {
+  const Lm = P.L / PX_PER_METER;
+
+  // --- 运动学量 ---
+  $("rTheta").textContent = (theta * 180 / Math.PI).toFixed(1) + "°";
+  $("rOmega").textContent = omega.toFixed(3) + " rad/s";
+  $("rV").textContent     = Math.abs(Lm * omega).toFixed(2) + " m/s";
+  $("rTime").textContent  = elapsed.toFixed(2) + " s";
+  $("rFps").textContent   = fps ? fps.toFixed(0) + " fps" : "—";
+
+  // --- 周期 ---
+  const wn = Math.sqrt(P.g / Lm);          // 固有角频率 ωₙ = √(g/L)
+  const T0 = 2 * Math.PI / wn;             // 小角度近似周期 2π√(L/g)
+  const a0 = refAngle;                     // 参考振幅（弧度）
+  // 精确周期级数展开：T = T0·(1 + θ₀²/16 + 11θ₀⁴/3072 + …)
+  const T1 = T0 * (1 + a0 * a0 / 16 + 11 * Math.pow(a0, 4) / 3072);
+  $("rT1").textContent = T1.toFixed(3) + " s";
+  $("rT2").textContent = T0.toFixed(3) + " s";
+
+  // --- 能量 ---
+  const Ek = 0.5 * P.mass * Math.pow(Lm * omega, 2);
+  const Ep = P.mass * P.g * Lm * (1 - Math.cos(theta));
+  const Et = Ek + Ep;
+  // 参考能量：以参考振幅静止释放时的势能
+  const E0 = Math.max(P.mass * P.g * Lm * (1 - Math.cos(a0)), 1e-6);
+
+  $("eKt").textContent = Ek.toFixed(3) + " J";
+  $("ePt").textContent = Ep.toFixed(3) + " J";
+  $("eT").textContent  = Et.toFixed(3) + " J";
+  $("eK").style.width  = Math.min(100, Ek / E0 * 100).toFixed(1) + "%";
+  $("eP").style.width  = Math.min(100, Ep / E0 * 100).toFixed(1) + "%";
+
+  // --- 阻尼特性 ---
+  const zeta = P.damping / (2 * wn);       // 阻尼比 ζ = c / (2ωₙ)
+  $("rZeta").textContent = zeta.toFixed(4);
+
+  // --- 控制台滑杆下方的实时注解 ---
+  $("fL").innerHTML = "固有周期 T₀ = <b>" + T0.toFixed(3) + " s</b>";
+  $("fG").innerHTML = "固有频率 ωₙ = <b>" + wn.toFixed(3) + " rad/s</b>";
+  if (zeta > 1e-9) {
+    const half = Math.LN2 / (zeta * wn);   // 振幅半衰期 t = ln2 / (ζωₙ)
+    $("fD").innerHTML = "振幅半衰期 <b>" +
+      (half < 1000 ? half.toFixed(1) + " s" : "&gt; 1000 s") + "</b>";
+  } else {
+    $("fD").innerHTML = "振幅半衰期 <b>∞</b>（无阻尼）";
+  }
+}
+
+/* ---------- 7. 画布尺寸自适应（含高分屏） ---------- */
+
+const cv = $("stage");
+const ctx = cv.getContext("2d");
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.parentElement.getBoundingClientRect();
+  W = Math.max(320, Math.round(rect.width));
+  H = Math.max(320, Math.round(rect.height));
+  cv.width  = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
+  cv.style.width  = W + "px";
+  cv.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  trail = [];
+}
+window.addEventListener("resize", resize);
+
+/* ---------- 8. 交互：拖动摆球 ---------- */
+
+function canvasPos(e) {
+  const r = cv.getBoundingClientRect();
+  const src = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - r.left, y: src.clientY - r.top };
+}
+
+function hitBob(pos) {
+  const bob = bobPoint(pivotPoint(), theta);
+  const dx = pos.x - bob.x, dy = pos.y - bob.y;
+  return dx * dx + dy * dy <= (BOB_R + 16) * (BOB_R + 16);
+}
+
+function startDrag(e) {
+  const pos = canvasPos(e);
+  if (!hitBob(pos)) return;
+  dragging = true;
+  cv.style.cursor = "grabbing";
+  e.preventDefault();
+}
+
+function moveDrag(e) {
+  const pos = canvasPos(e);
+  if (!dragging) {
+    cv.style.cursor = hitBob(pos) ? "grab" : "default";
+    return;
+  }
+  const p = pivotPoint();
+  // 由鼠标位置反算摆角（限制在 ±89°，避免摆杆翻上去）
+  let a = Math.atan2(pos.x - p.x, pos.y - p.y);
+  a = Math.max(-89 * Math.PI / 180, Math.min(89 * Math.PI / 180, a));
+  theta = a;
+  omega = 0;
+  elapsed = 0;
+  e.preventDefault();
+}
+
+function endDrag() {
+  if (!dragging) return;
+  dragging = false;
+  cv.style.cursor = "default";
+  // 把拖到的角度记为参考振幅，参考弧与能量条基准随之更新
+  refAngle = Math.max(Math.abs(theta), 1 * Math.PI / 180);
+  omega = 0;
+}
+
+cv.addEventListener("mousedown", startDrag);
+window.addEventListener("mousemove", moveDrag);
+window.addEventListener("mouseup", endDrag);
+cv.addEventListener("touchstart", startDrag, { passive: false });
+window.addEventListener("touchmove", moveDrag, { passive: false });
+window.addEventListener("touchend", endDrag);
+
+/* ---------- 9. 控件绑定 ---------- */
+
+function bindSlider(sid, vid, key, fmt) {
+  const s = $(sid), v = $(vid);
+  s.addEventListener("input", () => {
+    P[key] = parseFloat(s.value);
+    v.innerHTML = fmt(P[key]);
+    // 参数改动立即生效 —— 下一帧的 RK4 就用新参数重新积分，无需重置。
+    // 但摆长变化会改变画面几何，清掉拖尾以免留下跨界残影。
+    if (key === "L") trail = [];
+  });
+}
+
+bindSlider("sL", "vL", "L", x => x + "<small>px</small>");
+bindSlider("sG", "vG", "g", x => x.toFixed(1) + "<small>m/s²</small>");
+bindSlider("sD", "vD", "damping", x => x.toFixed(3));
+
+$("cShm").addEventListener("change", e => { P.shm = e.target.checked; reset(); });
+$("cTrail").addEventListener("change", e => { P.showTrail = e.target.checked; });
+$("cVec").addEventListener("change", e => { P.showVec = e.target.checked; });
+$("cGuide").addEventListener("change", e => { P.showGuide = e.target.checked; });
+
+$("btnPlay").addEventListener("click", () => {
+  running = !running;
+  $("btnPlay").textContent = running ? "暂停" : "继续";
+  acc = 0;
+});
+
+$("btnReset").addEventListener("click", () => {
+  reset();
+  running = true;
+  $("btnPlay").textContent = "暂停";
+});
+
+// 快捷键
+window.addEventListener("keydown", e => {
+  if (e.code === "Space") { e.preventDefault(); $("btnPlay").click(); }
+  if (e.key === "r" || e.key === "R") { $("btnReset").click(); }
+});
+
+/* ---------- 10. 启动 ---------- */
+resize();
+reset();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
