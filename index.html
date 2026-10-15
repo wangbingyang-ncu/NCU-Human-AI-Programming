@@ -207,7 +207,8 @@
     <p class="note">
       <b>提示</b>：直接用鼠标<strong>拖动摆球</strong>到任意角度松手，即可从该角度开始摆动。<br>
       <b>重置摆动</b>永远让摆球精准回到 <strong>45°</strong> 静止释放状态。<br>
-      比例尺：100 px = 1 m，故 L=200px 即 2.0 m 摆长。
+      比例尺：100 px = 1 m，故 L=200px 即 2.0 m 摆长。<br>
+      <b>双摆模式</b>：点击下方「切换双摆」，第二摆球带彩虹拖尾——拉格朗日方程无阻尼，能量严格守恒，微小初始差异随时间指数放大（混沌特性）。
     </p>
   </aside>
 
@@ -235,6 +236,7 @@
       <div class="row-foot" id="fD">振幅半衰期 —</div>
     </div>
     <div class="btns">
+      <button id="btnMode">切换双摆 🌈</button>
       <button class="primary" id="btnReset">重置摆动</button>
       <button id="btnPlay">暂停</button>
     </div>
@@ -282,9 +284,62 @@ let refAngle = RESET_DEG * Math.PI / 180; // 参考振幅：能量基准 + 参�
 let omega   = 0;                            // 当前角速度（rad/s）
 let elapsed = 0;                            // 已运行时间（秒）
 let running = true;                         // 是否在演算
-let dragging = false;                       // 是否正在拖动摆球
+let dragging = false;                       // 是否正在拖动摆球（0=无,1=摆球1,2=摆球2）
 let trail   = [];                           // 轨迹点
 let W = 800, H = 600;                       // 画布逻辑尺寸（CSS 像素）
+
+/* ---------- 双摆状态（进阶挑战） ---------- */
+// 双摆拉格朗日方程（等质量 m1=m2=1，L1=L2=P.L）：
+//  θ1'' = [-3g·sinθ1 - g·sin(θ1-2θ2) - 2·sin d·(ω2²L + ω1²L·cos d)] / [L·(3-cos 2d)]
+//  θ2'' = [2·sin d·(2ω1²L + 2g·cosθ1 + ω2²L·cos d)] / [L·(3-cos 2d)]
+// 其中 d = θ1-θ2。这是完整的非线性耦合二阶方程组，无任何小角度近似。
+let dblMode = false;                        // 是否处于双摆模式
+const D = { th1: 0, w1: 0, th2: 0, w2: 0 }; // 双摆状态向量
+let dblTrail = [];                          // 双摆第二摆球的彩虹拖尾
+let dblE0 = 1;                              // 双摆初始能量（能量条归一化基准）
+
+/** 双摆微分方程右端：返回 [dθ1/dt, dω1/dt, dθ2/dt, dω2/dt] */
+function dderiv2(s) {
+  const { th1, w1, th2, w2 } = s;
+  const L = P.L / PX_PER_METER;             // 摆长（米），两段等长
+  const g = P.g;
+  const d  = th1 - th2;
+  const sd = Math.sin(d), cd = Math.cos(d);
+  const den = 3 - Math.cos(2 * d);          // 等质量下的分母 L·(3-cos2d)
+  const a1 = (-3 * g * Math.sin(th1) - g * Math.sin(th1 - 2 * th2)
+              - 2 * sd * (w2 * w2 * L + w1 * w1 * L * cd)) / (L * den) - P.damping * w1;
+  const a2 = (2 * sd * (2 * w1 * w1 * L + 2 * g * Math.cos(th1) + w2 * w2 * L * cd))
+             / (L * den) - P.damping * w2;
+  return [w1, a1, w2, a2];
+}
+
+/** 双摆 RK4 一步（对 4 维状态向量） */
+function rk4Double(dt) {
+  const s0 = D;
+  const f = dderiv2;
+  const add = (s, k, h) => ({ th1: s.th1 + k[0] * h, w1: s.w1 + k[1] * h,
+                              th2: s.th2 + k[2] * h, w2: s.w2 + k[3] * h });
+  const k1 = f(s0);
+  const k2 = f(add(s0, k1, dt / 2));
+  const k3 = f(add(s0, k2, dt / 2));
+  const k4 = f(add(s0, k3, dt));
+  D.th1 += (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]) * dt / 6;
+  D.w1  += (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]) * dt / 6;
+  D.th2 += (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]) * dt / 6;
+  D.w2  += (k1[3] + 2 * k2[3] + 2 * k3[3] + k4[3]) * dt / 6;
+}
+
+/** 双摆总机械能（J）。KE = ½v1² + ½v2²，PE = g(y1 + y2)，y 轴向上 */
+function doubleEnergy() {
+  const L = P.L / PX_PER_METER;
+  const { th1, w1, th2, w2 } = D;
+  const v1sq = L * L * w1 * w1;
+  const v2sq = L * L * w1 * w1 + L * L * w2 * w2
+             + 2 * L * L * w1 * w2 * Math.cos(th1 - th2);
+  const KE = 0.5 * v1sq + 0.5 * v2sq;
+  const PE = P.g * (-L * Math.cos(th1) + (-L * Math.cos(th1) - L * Math.cos(th2)));
+  return KE + PE;
+}
 
 /* ---------- 2. 物理内核 ---------- */
 
@@ -316,6 +371,13 @@ function reset() {
   elapsed = 0;
   refAngle = theta;
   trail = [];
+  // 双摆初始状态：θ1 = 45°, θ2 = 135°（足够带动混沌翻转）
+  D.th1 = RESET_DEG * Math.PI / 180;
+  D.w1  = 0;
+  D.th2 = 135 * Math.PI / 180;
+  D.w2  = 0;
+  dblTrail = [];
+  dblE0 = Math.abs(doubleEnergy()) + 1e-6;
 }
 
 /* ---------- 3. 几何计算 ---------- */
@@ -324,9 +386,10 @@ function reset() {
 function pivotPoint() {
   // 让「悬挂点 → 摆球最低点」这一段摆动区域在画布内竖直居中，
   // 避免摆挂得太靠上、下方留出大片空白。
-  const ideal = (H - P.L) / 2;
+  const reach = dblMode ? P.L * 2 : P.L;         // 双摆最大伸展是两段杆长之和
+  const ideal = (H - reach) / 2 + (dblMode ? 40 : 0);
   const minY  = 70;                              // 别贴到画布顶
-  const maxY  = H - P.L - BOB_R - 44;            // 别让摆球触底
+  const maxY  = H - reach - BOB_R - 44;          // 别让摆球触底
   const y = Math.max(minY, Math.min(ideal, Math.max(minY, maxY)));
   return { x: W / 2, y };
 }
@@ -337,6 +400,16 @@ function bobPoint(pivot, th) {
     x: pivot.x + P.L * Math.sin(th),
     y: pivot.y + P.L * Math.cos(th)
   };
+}
+
+/** 双摆两段杆的端点：elbow（第一摆球）与 tip（第二摆球） */
+function doublePoints(pivot) {
+  const elbow = bobPoint(pivot, D.th1);
+  const tip = {
+    x: elbow.x + P.L * Math.sin(D.th2),
+    y: elbow.y + P.L * Math.cos(D.th2)
+  };
+  return { elbow, tip };
 }
 
 /* ---------- 4. 绘制 ---------- */
@@ -518,6 +591,79 @@ function drawBob(bob) {
   ctx.stroke();
 }
 
+/** 双摆第二摆球的半透明彩虹渐变拖尾 */
+function drawRainbowTrail() {
+  if (dblTrail.length < 2) return;
+  ctx.lineCap = "round";
+  const n = dblTrail.length;
+  for (let i = 1; i < n; i++) {
+    const t = i / n;                            // 0 = 最旧, 1 = 最新
+    const hue = dblTrail[i].h;                  // 沿轨迹流动的色相
+    ctx.strokeStyle = "hsla(" + hue.toFixed(0) + ",92%,62%," + (t * t * 0.55).toFixed(3) + ")";
+    ctx.lineWidth = 0.6 + t * 2.4;
+    ctx.beginPath();
+    ctx.moveTo(dblTrail[i - 1].x, dblTrail[i - 1].y);
+    ctx.lineTo(dblTrail[i].x, dblTrail[i].y);
+    ctx.stroke();
+  }
+}
+
+/** 双摆整体：两段杆 + 第一摆球（小）+ 第二摆球（大，带彩虹光晕） */
+function drawDouble(pivot) {
+  const { elbow, tip } = doublePoints(pivot);
+
+  // 第一段杆
+  ctx.shadowColor = "rgba(77,226,255,0.35)";
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = "rgba(160,205,240,0.75)";
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(pivot.x, pivot.y); ctx.lineTo(elbow.x, elbow.y); ctx.stroke();
+
+  // 第二段杆
+  ctx.shadowColor = "rgba(255,170,80,0.4)";
+  ctx.strokeStyle = "rgba(240,205,160,0.8)";
+  ctx.beginPath(); ctx.moveTo(elbow.x, elbow.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  drawPivot(pivot);
+
+  // 第一摆球：小一号的青色球
+  drawSmallBob(elbow.x, elbow.y, 13, [168, 244, 255], [53, 198, 234], [10, 95, 132], "77,226,255");
+
+  // 第二摆球：大号暖色球 + 彩虹光晕
+  const halo = ctx.createRadialGradient(tip.x, tip.y, BOB_R * 0.3, tip.x, tip.y, BOB_R * 3.4);
+  halo.addColorStop(0, "hsla(" + ((elapsed * 60) % 360).toFixed(0) + ",92%,65%,0.4)");
+  halo.addColorStop(1, "hsla(" + (((elapsed * 60) + 120) % 360).toFixed(0) + ",92%,60%,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(tip.x, tip.y, BOB_R * 3.4, 0, Math.PI * 2); ctx.fill();
+
+  drawSmallBob(tip.x, tip.y, BOB_R, [255, 235, 200], [255, 181, 71], [130, 70, 10], "255,181,71");
+
+  return { elbow, tip };
+}
+
+/** 通用小摆球（发光球体），rgb 数组指定渐变色 */
+function drawSmallBob(x, y, r, cHi, cMid, cLo, glow) {
+  const g = ctx.createRadialGradient(x - r * 0.34, y - r * 0.40, r * 0.08, x, y, r);
+  g.addColorStop(0.00, "#ffffff");
+  g.addColorStop(0.28, "rgb(" + cHi.join(",") + ")");
+  g.addColorStop(0.62, "rgb(" + cMid.join(",") + ")");
+  g.addColorStop(1.00, "rgb(" + cLo.join(",") + ")");
+  ctx.shadowColor = "rgba(" + glow + ",0.95)";
+  ctx.shadowBlur = 26;
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(x - r * 0.32, y - r * 0.40, r * 0.26, r * 0.18, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(220,240,255,0.5)";
+  ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+}
+
 /** 矢量箭头 */
 function arrow(x0, y0, x1, y1, color) {
   const a = Math.atan2(y1 - y0, x1 - x0);
@@ -573,15 +719,21 @@ function drawWatermark() {
   ctx.textBaseline = "top";
   ctx.font = "600 12.5px -apple-system, 'Microsoft YaHei', sans-serif";
   ctx.fillStyle = "rgba(200,215,235,0.42)";
-  ctx.fillText("单摆 · Simple Pendulum", 22, 20);
-
-  ctx.font = "11.5px ui-monospace, Consolas, monospace";
-  ctx.fillStyle = "rgba(120,140,180,0.55)";
-  ctx.fillText(
-    "θ'' = -(" + P.g.toFixed(1) + " / " + (P.L / PX_PER_METER).toFixed(2) + ") · " +
-    (P.shm ? "θ" : "sin θ") + (P.damping > 0 ? " - " + P.damping.toFixed(2) + "·θ'" : ""),
-    22, 40
-  );
+  if (dblMode) {
+    ctx.fillText("双摆 · Double Pendulum · 混沌系统", 22, 20);
+    ctx.font = "11.5px ui-monospace, Consolas, monospace";
+    ctx.fillStyle = "rgba(120,140,180,0.55)";
+    ctx.fillText("Lagrange 方程 · RK4 · 能量 E = " + doubleEnergy().toFixed(2) + " J", 22, 40);
+  } else {
+    ctx.fillText("单摆 · Simple Pendulum", 22, 20);
+    ctx.font = "11.5px ui-monospace, Consolas, monospace";
+    ctx.fillStyle = "rgba(120,140,180,0.55)";
+    ctx.fillText(
+      "θ'' = -(" + P.g.toFixed(1) + " / " + (P.L / PX_PER_METER).toFixed(2) + ") · " +
+      (P.shm ? "θ" : "sin θ") + (P.damping > 0 ? " - " + P.damping.toFixed(2) + "·θ'" : ""),
+      22, 40
+    );
+  }
 }
 
 /* ---------- 5. 主循环 ---------- */
@@ -602,9 +754,13 @@ function frame(ts) {
     acc += raw;
     let guard = 0;
     while (acc >= FIXED_DT && guard++ < 600) {
-      const [nt, no] = rk4(theta, omega, FIXED_DT);
-      theta = nt;
-      omega = no;
+      if (dblMode) {
+        rk4Double(FIXED_DT);
+      } else {
+        const [nt, no] = rk4(theta, omega, FIXED_DT);
+        theta = nt;
+        omega = no;
+      }
       elapsed += FIXED_DT;
       acc -= FIXED_DT;
     }
@@ -614,23 +770,40 @@ function frame(ts) {
 
   // --- 绘制 ---
   const pivot = pivotPoint();
-  const bob = bobPoint(pivot, theta);
 
-  if (P.showTrail) {
-    if (!dragging) trail.push({ x: bob.x, y: bob.y });
-    if (trail.length > TRAIL_MAX) trail.shift();
-  } else if (trail.length) {
-    trail.length = 0;
+  if (dblMode) {
+    const { tip } = doublePoints(pivot);
+    if (P.showTrail) {
+      if (!dragging) dblTrail.push({ x: tip.x, y: tip.y, h: (elapsed * 60) % 360 });
+      if (dblTrail.length > TRAIL_MAX) dblTrail.shift();
+    } else if (dblTrail.length) {
+      dblTrail.length = 0;
+    }
+    if (!P.showTrail) dblTrail.length = 0;
+
+    drawBackground();
+    if (P.showTrail) drawRainbowTrail();
+    drawDouble(pivot);
+    drawWatermark();
+  } else {
+    const bob = bobPoint(pivot, theta);
+
+    if (P.showTrail) {
+      if (!dragging) trail.push({ x: bob.x, y: bob.y });
+      if (trail.length > TRAIL_MAX) trail.shift();
+    } else if (trail.length) {
+      trail.length = 0;
+    }
+
+    drawBackground();
+    if (P.showGuide) drawGuide(pivot);
+    if (P.showTrail) drawTrail();
+    drawRod(pivot, bob);
+    drawPivot(pivot);
+    if (P.showVec) drawVectors(pivot, bob);
+    drawBob(bob);
+    drawWatermark();
   }
-
-  drawBackground();
-  if (P.showGuide) drawGuide(pivot);
-  if (P.showTrail) drawTrail();
-  drawRod(pivot, bob);
-  drawPivot(pivot);
-  if (P.showVec) drawVectors(pivot, bob);
-  drawBob(bob);
-  drawWatermark();
 
   // --- 读数 ---
   fpsAcc += raw; fpsN++; fpsTimer += raw;
@@ -649,6 +822,37 @@ const $ = id => document.getElementById(id);
 
 function updateReadout() {
   const Lm = P.L / PX_PER_METER;
+
+  $("rTime").textContent  = elapsed.toFixed(2) + " s";
+  $("rFps").textContent   = fps ? fps.toFixed(0) + " fps" : "—";
+
+  if (dblMode) {
+    // 双摆读数：两个摆角 + 末端摆球速度 + 总能量
+    $("rTheta").textContent =
+      (D.th1 * 180 / Math.PI).toFixed(0) + "° / " + (D.th2 * 180 / Math.PI).toFixed(0) + "°";
+    $("rOmega").textContent = D.w1.toFixed(3) + " rad/s";
+    $("rV").textContent = (Lm * Math.hypot(
+      D.w1 * Math.sin(D.th1) + D.w2 * Math.sin(D.th2),
+      D.w1 * Math.cos(D.th1) + D.w2 * Math.cos(D.th2)
+    )).toFixed(2) + " m/s";
+    $("rT1").textContent = "—";
+    $("rT2").textContent = "—";
+    $("rZeta").textContent = (P.damping / (2 * Math.sqrt(P.g / Lm))).toFixed(4);
+
+    const E = doubleEnergy();
+    $("eKt").textContent = "—"; $("ePt").textContent = "—";
+    $("eT").textContent  = E.toFixed(2) + " J";
+    $("eK").style.width  = "0%";
+    $("eP").style.width  = Math.min(100, Math.abs(E) / dblE0 * 100).toFixed(1) + "%";
+
+    $("fL").innerHTML = "双摆 L₁ = L₂ = <b>" + P.L.toFixed(0) + " px</b>";
+    $("fG").innerHTML = "混沌系统 · 对初值极端敏感";
+    const zeta = P.damping / (2 * Math.sqrt(P.g / Lm));
+    $("fD").innerHTML = zeta > 1e-9
+      ? "能量耗散率 <b>" + (zeta * Math.sqrt(P.g / Lm)).toFixed(4) + " /s</b>"
+      : "能量守恒 <b>无耗散</b>";
+    return;
+  }
 
   // --- 运动学量 ---
   $("rTheta").textContent = (theta * 180 / Math.PI).toFixed(1) + "°";
@@ -711,6 +915,7 @@ function resize() {
   cv.style.height = H + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   trail = [];
+  dblTrail = [];
 }
 window.addEventListener("resize", resize);
 
@@ -723,15 +928,26 @@ function canvasPos(e) {
 }
 
 function hitBob(pos) {
-  const bob = bobPoint(pivotPoint(), theta);
+  const pivot = pivotPoint();
+  if (dblMode) {
+    const { elbow, tip } = doublePoints(pivot);
+    for (const [p, n] of [[tip, 2], [elbow, 1]]) {
+      const dx = pos.x - p.x, dy = pos.y - p.y;
+      const r = (n === 2 ? BOB_R : 13) + 16;
+      if (dx * dx + dy * dy <= r * r) return n;
+    }
+    return 0;
+  }
+  const bob = bobPoint(pivot, theta);
   const dx = pos.x - bob.x, dy = pos.y - bob.y;
-  return dx * dx + dy * dy <= (BOB_R + 16) * (BOB_R + 16);
+  return dx * dx + dy * dy <= (BOB_R + 16) * (BOB_R + 16) ? 1 : 0;
 }
 
 function startDrag(e) {
   const pos = canvasPos(e);
-  if (!hitBob(pos)) return;
-  dragging = true;
+  const hit = hitBob(pos);
+  if (!hit) return;
+  dragging = hit;
   cv.style.cursor = "grabbing";
   e.preventDefault();
 }
@@ -743,11 +959,24 @@ function moveDrag(e) {
     return;
   }
   const p = pivotPoint();
-  // 由鼠标位置反算摆角（限制在 ±89°，避免摆杆翻上去）
-  let a = Math.atan2(pos.x - p.x, pos.y - p.y);
-  a = Math.max(-89 * Math.PI / 180, Math.min(89 * Math.PI / 180, a));
-  theta = a;
-  omega = 0;
+  if (dblMode) {
+    // 拖任一摆球：θ1 由悬挂点→鼠标方向确定，θ2 由肘关节→鼠标方向确定
+    let a1 = Math.atan2(pos.x - p.x, pos.y - p.y);
+    a1 = Math.max(-179 * Math.PI / 180, Math.min(179 * Math.PI / 180, a1));
+    D.th1 = a1;
+    const elbow = bobPoint(p, D.th1);
+    let a2 = Math.atan2(pos.x - elbow.x, pos.y - elbow.y);
+    a2 = Math.max(-179 * Math.PI / 180, Math.min(179 * Math.PI / 180, a2));
+    D.th2 = a2;
+    D.w1 = 0; D.w2 = 0;
+    dblTrail = [];
+  } else {
+    // 由鼠标位置反算摆角（限制在 ±89°，避免摆杆翻上去）
+    let a = Math.atan2(pos.x - p.x, pos.y - p.y);
+    a = Math.max(-89 * Math.PI / 180, Math.min(89 * Math.PI / 180, a));
+    theta = a;
+    omega = 0;
+  }
   elapsed = 0;
   e.preventDefault();
 }
@@ -756,9 +985,11 @@ function endDrag() {
   if (!dragging) return;
   dragging = false;
   cv.style.cursor = "default";
-  // 把拖到的角度记为参考振幅，参考弧与能量条基准随之更新
-  refAngle = Math.max(Math.abs(theta), 1 * Math.PI / 180);
-  omega = 0;
+  if (!dblMode) {
+    // 把拖到的角度记为参考振幅，参考弧与能量条基准随之更新
+    refAngle = Math.max(Math.abs(theta), 1 * Math.PI / 180);
+    omega = 0;
+  }
 }
 
 cv.addEventListener("mousedown", startDrag);
@@ -794,6 +1025,18 @@ $("btnPlay").addEventListener("click", () => {
   running = !running;
   $("btnPlay").textContent = running ? "暂停" : "继续";
   acc = 0;
+});
+
+/* 单摆 ⇄ 双摆模式切换 */
+$("btnMode").addEventListener("click", () => {
+  dblMode = !dblMode;
+  $("btnMode").textContent = dblMode ? "切回单摆" : "切换双摆 🌈";
+  $("btnMode").classList.toggle("primary", dblMode);
+  $("btnReset").classList.toggle("primary", !dblMode);
+  trail = []; dblTrail = [];
+  reset();
+  running = true;
+  $("btnPlay").textContent = "暂停";
 });
 
 $("btnReset").addEventListener("click", () => {
